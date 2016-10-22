@@ -1,0 +1,93 @@
+<html>
+<head>
+    <title>Elevages</title>
+    <meta http-equiv="content-type" content="text/html; charset=UTF8">
+    <link rel="stylesheet" href="css/leaflet.css"/>
+    <script src="js/leaflet.js"></script>
+    <script src="//d3js.org/d3.v4.min.js" charset="utf-8"></script>
+
+    <style type="text/css">
+        body {
+            padding: 0;
+            margin: 0;
+        }
+
+        html, body, #map {
+            height: 100%;
+        }
+
+    </style>
+    <link rel="communes" type="text/csv" href="data/eucircos_regions_departements_circonscriptions_communes_gps.csv"/>
+    <link rel="elevages" type="text/csv" href="data/elev.csv"/>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script>
+
+    var elevage_icon = L.icon({
+        iconUrl: 'img/cow.png',
+        iconSize: [16, 16],
+        popupAnchor: [0, 0]
+    });
+
+    var parse_csv = function (ligne) {
+        var obj = {
+            from: ligne.from,
+            to: ligne.to
+        };
+
+        for (var i = 0; i < 24; i++) {
+            obj[i] = +ligne[i];
+        }
+        return obj;
+    };
+
+    var q = d3.queue();
+    var ssv = d3.dsvFormat(";"); // semicolon separated values
+
+    q.defer(d3.text, d3.select('link[rel="communes"]').attr('href'))
+            .defer(d3.text, d3.select('link[rel="elevages"]').attr('href'))
+            .await(function (error, communes_text, elevages_text) {
+                if (!error) {
+                    var elevages = ssv.parse(elevages_text);
+
+                    var coord_map = d3.map();
+                    ssv.parse(communes_text).map(function (c) {
+                        if (c.latitude && c.longitude) {
+                            coord_map.set(c.code_insee, [c.latitude, c.longitude])
+                        }
+                    });
+
+                    var markers_layer = L.featureGroup([].concat.apply([], elevages.map(function (e) {
+                        if (coord_map.has(e.EDE.substr(0, 5))) {
+                            return [L.marker(coord_map.get(e.EDE.substr(0, 5)), {
+                                'icon': elevage_icon,
+                                'title': e.NOM
+                            })];
+                        } else {
+                            return [];
+                        }
+                    })));
+
+                    var map = L.map('map', {
+                        center: [47, 3],
+                        zoom: 6,
+                        maxBounds: markers_layer.getBounds().pad(0.1)
+                    });
+                    map.fitBounds(markers_layer.getBounds().pad(0.1));
+
+                    var tileLayer = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors',
+                    });
+                    map.setView(new L.LatLng(47, 3), 6);
+                    map.addLayer(tileLayer);
+                    map.addLayer(markers_layer);
+
+                }
+            });
+</script>
+
+</body>
+</html>
